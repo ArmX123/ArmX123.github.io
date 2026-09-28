@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Label Splitter - ตัดต่อใบปะหน้า (High-Res)</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f4f7f6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 15px;
+        }
+        .container {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h2 { text-align: center; color: #444; font-size: 22px; margin-top: 0; }
+        .control-group { margin-bottom: 15px; }
+        label { font-weight: bold; font-size: 14px; }
+        input[type="file"] { width: 100%; margin-top: 5px; }
+        select { width: 100%; padding: 8px; margin-top: 5px; border-radius: 4px; }
+        
+        button.generate-btn {
+            background: #ff5722; color: white; border: none;
+            padding: 12px 20px; border-radius: 5px; cursor: pointer;
+            font-size: 16px; font-weight: bold; width: 100%; margin-top: 10px;
+        }
+        button.generate-btn:hover { background: #e64a19; }
+        
+        .share-btn {
+            background: #007aff; color: white; border: none;
+            padding: 12px 20px; border-radius: 5px; cursor: pointer;
+            font-size: 16px; font-weight: bold; width: 100%; margin-top: 10px;
+            display: none; 
+        }
+        .share-btn:hover { background: #005bb5; }
+        
+        #output {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            margin-top: 20px;
+            padding: 15px;
+            background: #e9ecef;
+            border-radius: 8px;
+        }
+        .output-img {
+            max-width: 100%;
+            height: auto;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            background: #fff;
+            border: 1px solid #ccc;
+            -webkit-touch-callout: default; 
+        }
+        .ratio-group {
+            background: #fff3e0;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #ffe0b2;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        .slider-row { margin-bottom: 10px; }
+        .highlight-box {
+            background: #e3f2fd;
+            padding: 10px;
+            border-radius: 5px;
+            border: 1px solid #bbdefb;
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>ตัดต่อใบปะหน้า (ความละเอียดสูง)</h2>
+    
+    <div class="control-group">
+        <label>1. อัปโหลดไฟล์ (PDF หรือ รูปภาพ):</label>
+        <input type="file" id="fileInput" accept="application/pdf,image/*">
+    </div>
+
+    <div class="control-group">
+        <label>2. เลือกจำนวนท่อนที่ต้องการตัด:</label>
+        <select id="splitCount" onchange="toggleRatioSetting()">
+            <option value="2">2 ท่อน (หัว-ท้าย)</option>
+            <option value="3">3 ท่อน (หัว-กลาง-ท้าย)</option>
+        </select>
+    </div>
+
+    <div class="ratio-group" id="cutRatioGroup2">
+        <label>จุดตัด (เปอร์เซ็นต์ส่วนหัว): <span id="ratioValue2">52</span>%</label>
+        <input type="range" id="cutRatio2" min="20" max="80" value="52" style="width: 100%;" oninput="document.getElementById('ratioValue2').innerText = this.value">
+    </div>
+
+    <div class="ratio-group" id="cutRatioGroup3" style="display: none;">
+        <div class="slider-row">
+            <label>จุดตัดที่ 1 (หัว-กลาง): <span id="ratioValue3_1">36</span>%</label>
+            <input type="range" id="cutRatio3_1" min="10" max="80" value="36" style="width: 100%;" oninput="document.getElementById('ratioValue3_1').innerText = this.value">
+        </div>
+        <div class="slider-row">
+            <label>จุดตัดที่ 2 (กลาง-ท้าย): <span id="ratioValue3_2">72</span>%</label>
+            <input type="range" id="cutRatio3_2" min="20" max="90" value="72" style="width: 100%;" oninput="document.getElementById('ratioValue3_2').innerText = this.value">
+        </div>
+    </div>
+
+    <div class="control-group">
+        <label>
+            <input type="checkbox" id="rotateCheck" checked> 
+            3. ปรับเป็นแนวนอนก่อนตัด (Rotate 90°)
+        </label>
+    </div>
+
+    <div class="control-group highlight-box">
+        <label style="color: #0d47a1;">
+            <input type="checkbox" id="bwCheck" checked> 
+            4. ปรับขาวดำคมชัดสูง (สำหรับปริ้นความร้อน)
+        </label>
+    </div>
+
+    <button class="generate-btn" onclick="processFile()">⚙️ สร้างใบปะหน้า</button>
+    
+    <button id="shareBtn" class="share-btn" onclick="shareToPhotos()">⬆️ ส่งออก / บันทึกรูปภาพ</button>
+</div>
+
+<div id="output"></div>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    
+    let currentGeneratedImageDataUrl = '';
+    let readyFileToShare = null; // ตัวแปรสำหรับเก็บไฟล์ที่เตรียมไว้ล่วงหน้าเพื่อ iPhone
+
+    function toggleRatioSetting() {
+        const count = document.getElementById('splitCount').value;
+        if (count === '2') {
+            document.getElementById('cutRatioGroup2').style.display = 'block';
+            document.getElementById('cutRatioGroup3').style.display = 'none';
+        } else {
+            document.getElementById('cutRatioGroup2').style.display = 'none';
+            document.getElementById('cutRatioGroup3').style.display = 'block';
+        }
+    }
+
+    async function processFile() {
+        const fileInput = document.getElementById('fileInput');
+        const outputDiv = document.getElementById('output');
+        const shareBtn = document.getElementById('shareBtn');
+        
+        shareBtn.style.display = 'none'; 
+        readyFileToShare = null;
+
+        if (!fileInput.files || fileInput.files.length === 0) {
+            alert('กรุณาเลือกไฟล์ก่อน');
+            return;
+        }
+
+        outputDiv.style.display = 'flex';
+        outputDiv.innerHTML = '<p>กำลังประมวลผลความละเอียดสูง กรุณารอสักครู่...</p>';
+        const file = fileInput.files[0];
+
+        try {
+            if (file.type === 'application/pdf') {
+                await handlePDF(file);
+            } else if (file.type.startsWith('image/')) {
+                await handleImage(file);
+            } else {
+                alert('รองรับเฉพาะไฟล์ PDF และรูปภาพเท่านั้น');
+                outputDiv.style.display = 'none';
+            }
+        } catch (error) {
+            console.error(error);
+            alert('เกิดข้อผิดพลาดในการอ่านไฟล์');
+            outputDiv.style.display = 'none';
+        }
+    }
+
+    async function handlePDF(file) {
+        const arrayBuffer = await file.arrayBuffer();
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+        const page = await pdf.getPage(1);
+        
+        const viewport = page.getViewport({ scale: 4.0 }); 
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const ctx = canvas.getContext('2d');
+        
+        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+        splitAndRender(canvas);
+    }
+
+    function handleImage(file) {
+        return new Promise((resolve) => {
+            const url = URL.createObjectURL(file);
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                canvas.getContext('2d').drawImage(img, 0, 0);
+                URL.revokeObjectURL(url);
+                splitAndRender(canvas);
+                resolve();
+            };
+            img.src = url;
+        });
+    }
+
+    function applyBlackAndWhite(canvas, ctx) {
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = imageData.data;
+        const threshold = 180; 
+
+        for (let i = 0; i < data.length; i += 4) {
+            const r = data[i];
+            const g = data[i + 1];
+            const b = data[i + 2];
+            const v = (0.299 * r + 0.587 * g + 0.114 * b);
+            const color = v > threshold ? 255 : 0;
+            
+            data[i] = color;
+            data[i+1] = color;
+            data[i+2] = color;
+        }
+        ctx.putImageData(imageData, 0, 0);
+    }
+
+    function splitAndRender(sourceCanvas) {
+        const isRotate = document.getElementById('rotateCheck').checked;
+        const isBW = document.getElementById('bwCheck').checked;
+        const splitCount = parseInt(document.getElementById('splitCount').value);
+        
+        let workCanvas = document.createElement('canvas');
+        let ctx = workCanvas.getContext('2d');
+        
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+
+        if (isRotate) {
+            workCanvas.width = sourceCanvas.height;
+            workCanvas.height = sourceCanvas.width;
+            ctx.translate(workCanvas.width / 2, workCanvas.height / 2);
+            ctx.rotate(-90 * Math.PI / 180);
+            ctx.drawImage(sourceCanvas, -sourceCanvas.width / 2, -sourceCanvas.height / 2);
+        } else {
+            workCanvas.width = sourceCanvas.width;
+            workCanvas.height = sourceCanvas.height;
+            ctx.drawImage(sourceCanvas, 0, 0);
+        }
+
+        const targetW = 1740;
+        const targetH = 3900;
+
+        const finalCanvas = document.createElement('canvas');
+        finalCanvas.width = targetW;
+        finalCanvas.height = targetH * splitCount;
+        const fCtx = finalCanvas.getContext('2d');
+        
+        fCtx.imageSmoothingEnabled = true;
+        fCtx.imageSmoothingQuality = 'high';
+
+        fCtx.fillStyle = '#ffffff';
+        fCtx.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+
+        const cutVertically = workCanvas.width > workCanvas.height;
+        const fullW = workCanvas.width;
+        const fullH = workCanvas.height;
+
+        function drawDashedLine(yPos) {
+            fCtx.beginPath();
+            fCtx.setLineDash([40, 40]); 
+            fCtx.moveTo(0, yPos);
+            fCtx.lineTo(targetW, yPos);
+            fCtx.lineWidth = 10;
+            fCtx.strokeStyle = '#000000';
+            fCtx.stroke();
+            fCtx.setLineDash([]);
+        }
+
+        if (splitCount === 2) {
+            const cutRatio = parseInt(document.getElementById('cutRatio2').value) / 100;
+            const part1Size = cutVertically ? fullW * cutRatio : fullH * cutRatio;
+            const part2Size = cutVertically ? fullW * (1 - cutRatio) : fullH * (1 - cutRatio);
+
+            fCtx.drawImage(workCanvas, 0, 0, cutVertically ? part1Size : fullW, cutVertically ? fullH : part1Size, 0, 0, targetW, targetH);
+            drawDashedLine(targetH);
+            fCtx.drawImage(workCanvas, cutVertically ? part1Size : 0, cutVertically ? 0 : part1Size, cutVertically ? part2Size : fullW, cutVertically ? fullH : part2Size, 0, targetH, targetW, targetH);
+            
+        } else if (splitCount === 3) {
+            let ratio1 = parseInt(document.getElementById('cutRatio3_1').value) / 100;
+            let ratio2 = parseInt(document.getElementById('cutRatio3_2').value) / 100;
+            if (ratio1 >= ratio2) ratio2 = ratio1 + 0.01;
+
+            const size1 = cutVertically ? fullW * ratio1 : fullH * ratio1;
+            const size2 = cutVertically ? fullW * (ratio2 - ratio1) : fullH * (ratio2 - ratio1);
+            const size3 = cutVertically ? fullW * (1 - ratio2) : fullH * (1 - ratio2);
+
+            const start2 = cutVertically ? fullW * ratio1 : fullH * ratio1;
+            const start3 = cutVertically ? fullW * ratio2 : fullH * ratio2;
+
+            fCtx.drawImage(workCanvas, 0, 0, cutVertically ? size1 : fullW, cutVertically ? fullH : size1, 0, 0, targetW, targetH);
+            drawDashedLine(targetH);
+            fCtx.drawImage(workCanvas, cutVertically ? start2 : 0, cutVertically ? 0 : start2, cutVertically ? size2 : fullW, cutVertically ? fullH : size2, 0, targetH, targetW, targetH);
+            drawDashedLine(targetH * 2);
+            fCtx.drawImage(workCanvas, cutVertically ? start3 : 0, cutVertically ? 0 : start3, cutVertically ? size3 : fullW, cutVertically ? fullH : size3, 0, targetH * 2, targetW, targetH);
+        }
+
+        if (isBW) {
+            applyBlackAndWhite(finalCanvas, fCtx);
+        }
+
+        const outputDiv = document.getElementById('output');
+        outputDiv.innerHTML = ''; 
+
+        // แสดงผลรูปภาพบนหน้าเว็บ
+        currentGeneratedImageDataUrl = finalCanvas.toDataURL('image/png', 1.0);
+        const imgElement = document.createElement('img');
+        imgElement.src = currentGeneratedImageDataUrl;
+        imgElement.className = 'output-img';
+        outputDiv.appendChild(imgElement);
+
+        // *** แปลงและเตรียมไฟล์ให้พร้อมล่วงหน้า สำหรับระบบแชร์ของ iPhone ***
+        finalCanvas.toBlob((blob) => {
+            readyFileToShare = new File([blob], 'label_print.png', { type: 'image/png' });
+            // แสดงปุ่มเมื่อไฟล์เตรียมเสร็จสมบูรณ์
+            document.getElementById('shareBtn').style.display = 'block';
+        }, 'image/png', 1.0);
+    }
+
+    async function shareToPhotos() {
+        if (!readyFileToShare) {
+            alert('กำลังเตรียมไฟล์รูปภาพ กรุณารอสักครู่...');
+            return;
+        }
+
+        // เช็คว่ามือถือรองรับระบบแชร์ไฟล์หรือไม่
+        if (navigator.canShare && navigator.canShare({ files: [readyFileToShare] })) {
+            try {
+                // เรียกเมนูแชร์ของเครื่อง (จะมีให้เลือก บันทึกรูปภาพ / คัดลอก / ส่งไปแอปอื่น)
+                await navigator.share({
+                    files: [readyFileToShare]
+                });
+            } catch (err) {
+                console.log('ผู้ใช้ยกเลิกการแชร์ หรือเกิดข้อผิดพลาด:', err);
+            }
+        } else {
+            // กรณีเปิดในคอมพิวเตอร์ หรือเบราว์เซอร์เก่า จะเปลี่ยนเป็นการดาวน์โหลดปกติ
+            const link = document.createElement('a');
+            link.href = currentGeneratedImageDataUrl;
+            link.download = 'label_print.png';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    }
+</script>
+</body>
+</html>
